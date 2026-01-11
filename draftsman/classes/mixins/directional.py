@@ -53,6 +53,10 @@ class DirectionalMixin(Exportable):
         name = name if name is not attrs.NOTHING else get_first(self.similar_entities)
         object.__setattr__(self, "name", name)
 
+        # Cache valid_directions since it's constant for the entity lifetime
+        # (depends only on self.flags which depends on self.name)
+        object.__setattr__(self, "_valid_directions", self._compute_valid_directions())
+
         # We generate collision sets on an as-needed basis for each unique
         # entity that is instantiated
         try:
@@ -72,6 +76,10 @@ class DirectionalMixin(Exportable):
         # `direction` a custom setattr function and mimic a "raw" attribute set.
         direction = kwargs.get("direction", Direction.NORTH)
         object.__setattr__(self, "direction", direction)
+
+        # Cache collision_set (invalidated when direction changes)
+        object.__setattr__(self, "_cached_collision_set", None)
+        object.__setattr__(self, "_cached_collision_set_dir", None)
 
     # =========================================================================
 
@@ -101,14 +109,8 @@ class DirectionalMixin(Exportable):
 
     # =========================================================================
 
-    @property
-    def valid_directions(self) -> set[Direction]:
-        """
-        A set containing all directions that this entity can face. If
-        :py:attr:`~.direction` is set to a direction not contained within this
-        set, it is clamped to the nearest correct direction when imported into
-        Factorio.
-        """
+    def _compute_valid_directions(self) -> set[Direction]:
+        """Compute valid_directions (called once during construction)."""
         if not self.rotatable:
             return {Direction.NORTH}
         try:
@@ -123,13 +125,39 @@ class DirectionalMixin(Exportable):
             # direction
             return SIXTEEN_WAY_DIRECTIONS
 
+    @property
+    def valid_directions(self) -> set[Direction]:
+        """
+        A set containing all directions that this entity can face. If
+        :py:attr:`~.direction` is set to a direction not contained within this
+        set, it is clamped to the nearest correct direction when imported into
+        Factorio.
+        """
+        # Use cached value if available (cached in __attrs_pre_init__)
+        cached = getattr(self, "_valid_directions", None)
+        if cached is not None:
+            return cached
+        # Compute and cache (fallback for subclasses or edge cases)
+        result = self._compute_valid_directions()
+        object.__setattr__(self, "_valid_directions", result)
+        return result
+
     # =========================================================================
 
     @property
     def collision_set(self) -> Optional[CollisionSet]:
-        return _rotated_collision_sets.get(self.name, {}).get(
+        # Use cached value if direction hasn't changed
+        cached_dir = getattr(self, "_cached_collision_set_dir", None)
+        if cached_dir is self.direction:
+            return self._cached_collision_set
+
+        # Compute and cache
+        result = _rotated_collision_sets.get(self.name, {}).get(
             self.direction.to_closest_valid_direction(self.valid_directions), None
         )
+        object.__setattr__(self, "_cached_collision_set", result)
+        object.__setattr__(self, "_cached_collision_set_dir", self.direction)
+        return result
 
     # =========================================================================
 
