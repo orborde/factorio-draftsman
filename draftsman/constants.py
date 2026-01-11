@@ -1007,7 +1007,7 @@ class ValidationMode(Enum):
     """
     PEDANTIC = "pedantic"
     """
-    The most verbose option. Includes all of the previous errors and warnings, 
+    The most verbose option. Includes all of the previous errors and warnings,
     in addition to more linting-like behavior.
     """
 
@@ -1016,17 +1016,23 @@ class ValidationMode(Enum):
 
     def __eq__(self, other):
         if isinstance(other, ValidationMode):
-            return self._member_names_.index(self.name) == self._member_names_.index(
-                other.name
-            )
+            return self._order_ == other._order_
+        return NotImplemented
+
+    def __lt__(self, other):
+        if isinstance(other, ValidationMode):
+            return self._order_ < other._order_
         return NotImplemented
 
     def __gt__(self, other):
         if isinstance(other, ValidationMode):
-            return self._member_names_.index(self.name) > self._member_names_.index(
-                other.name
-            )
+            return self._order_ > other._order_
         return NotImplemented
+
+
+# Cache ordering indices for O(1) comparison instead of O(n) index lookups
+for _idx, _member in enumerate(ValidationMode):
+    _member._order_ = _idx
 
 
 @document_enum
