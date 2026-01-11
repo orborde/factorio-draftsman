@@ -99,6 +99,11 @@ def conditional(severity):
             if mode < severity:
                 return
 
+            # Fast path: when not collecting warnings, skip catch_warnings overhead
+            if warning_list is None and error_list is None:
+                meth(*args)
+                return
+
             try:
                 with warnings.catch_warnings(record=True) as ws:
                     meth(*args)
@@ -129,6 +134,12 @@ def conditional(severity):
             mode = mode if mode is not None else _validation_mode
             if mode < severity:
                 return
+
+            # Fast path: when not collecting warnings, skip catch_warnings overhead
+            if warning_list is None and error_list is None:
+                meth(*args)
+                return
+
             try:
                 with warnings.catch_warnings(record=True) as ws:
                     meth(*args)
